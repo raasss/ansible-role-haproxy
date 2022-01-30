@@ -1,0 +1,92 @@
+---
+# tasks file for roles/haproxy
+
+# - name: Update APT cache
+#   apt:
+#     update_cache: yes
+#     cache_valid_time: 3600
+
+- name: Install packages
+  apt:
+    name:
+      - haproxy
+    install_recommends: no
+    state: present
+  register: haproxy_packages_installed
+
+- name: Set permissions on /etc/haproxy
+  file:
+    path: /etc/haproxy
+    state: directory
+    mode: 0750
+    owner: root
+    group: root
+
+- name: Stop service until fully configured
+  service:
+    name: haproxy
+    state: stopped
+  when: haproxy_packages_installed.changed
+
+- name: Configure haproxy.cfg
+  template:
+    src: haproxy.cfg.j2
+    dest: /etc/haproxy/haproxy.cfg
+    owner: root
+    group: root
+    mode: 0644
+  notify:
+    - restart haproxy service
+
+- name: Generate DH Parameters
+  community.crypto.openssl_dhparam:
+    path: /etc/haproxy/dhparams.pem
+    size: 2048
+
+- name: Create certs directory
+  file:
+    path: /etc/haproxy/certs
+    state: directory
+    mode: 0755
+    owner: root
+    group: root
+
+# - name: Assemble from fragments from a directory
+#   assemble:
+#     src: "/etc/letsencrypt"
+#     regexp: "^{{ item.domain }}\\.key|^{{ item.domain }}-fullchain\\.crt"
+#     dest: /etc/haproxy/certs/{{ item.domain }}.pem
+#   loop: "{{ haproxy_virtual_sites }}"
+#   notify:
+#     - restart haproxy service
+
+- name: Copy certificates
+  copy:
+    src: "{{ item.cert_src }}"
+    dest: /etc/haproxy/certs/{{ item.cert_file }}
+  loop: "{{ haproxy_virtual_sites }}"
+  notify:
+    - restart haproxy service
+
+# - name: Assemble from fragments from a directory for aliases
+#   assemble:
+#     src: "/etc/letsencrypt"
+#     regexp: "^{{ item.1 }}\\.key|^{{ item.1 }}-fullchain\\.crt"
+#     dest: /etc/haproxy/certs/{{ item.1 }}.pem
+#   loop: "{{ haproxy_virtual_sites|subelements('aliases') }}"
+#   notify:
+#     - restart haproxy service
+
+# - name: Copy certificates
+#   copy:
+#     src: "{{ item.cert_file }}"
+#     dest: /etc/haproxy/certs/{{ item.1 }}.pem
+#   loop: "{{ haproxy_virtual_sites|subelements('aliases') }}"
+#   notify:
+#     - restart haproxy service
+
+- name: Enable and start service
+  service:
+    name: haproxy
+    state: started
+    enabled: yes

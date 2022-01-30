@@ -1,0 +1,4 @@
+---
+# defaults file for roles/haproxy
+haproxy_virtual_sites: []
+haproxy_certs_dir: "{{ inventory_dir }}/certificates/letsencrypt"
